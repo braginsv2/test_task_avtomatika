@@ -1,130 +1,217 @@
 import cv2
 import numpy as np
-from marker_generator import MarkerGenerator
-from marker_detector import MarkerDetector
 import time
+from marker_generator import MarkerGenerator
+from marker_detector import detect_marker
 
-def test_marker_generation():
-    """Тест генерации маркера"""
-    print("\nТест генерации маркера:")
+def test_detector():
+    # Создаем генератор маркеров
     generator = MarkerGenerator()
-    marker = generator.generate_marker(marker_id=1)
-    cv2.imwrite('test_marker.png', marker)
     
-    # Показываем сгенерированный маркер
-    cv2.imshow('Generated Marker', marker)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    
-    print("Маркер успешно сгенерирован")
-
-def test_marker_detection():
-    """Тест обнаружения маркера"""
-    print("\nТест обнаружения маркера:")
-    # Загружаем маркер
-    marker = cv2.imread('test_marker.png')
-    if marker is None:
-        print("Ошибка: не удалось загрузить маркер")
-        return
-    
-    # Показываем исходный маркер
-    cv2.imshow('Original Marker', marker)
-    cv2.waitKey(1000)
-    
-    # Создаем детектор
-    detector = MarkerDetector()
-    
-    # Получаем обработанное изображение
-    processed = detector.preprocess_image(marker)
-    cv2.imshow('Processed Image', processed)
-    cv2.waitKey(1000)
-    
-    # Примерные параметры камеры (нужно откалибровать)
-    camera_matrix = np.array([[1000, 0, 320],
-                            [0, 1000, 240],
-                            [0, 0, 1]], dtype=np.float32)
-    dist_coeffs = np.zeros((5, 1), dtype=np.float32)
-    
-    # Обнаружение маркера
-    result = detector.detect_marker(marker, camera_matrix, dist_coeffs)
-    
-    if result is not None:
-        print("Маркер успешно обнаружен")
-        print(f"Углы: {result['rotation']}")
-        print(f"Расстояние: {result['translation'][2].item():.2f}м")
+    # Тестируем маркеры с разными ID
+    for marker_id in [1, 2, 3]:
+        print(f"\nТестирование маркера с ID {marker_id}")
         
-        # Отображаем результат
-        result_image = marker.copy()
-        cv2.drawContours(result_image, [result['corners']], -1, (0, 255, 0), 2)
-        cv2.imshow('Detection Result', result_image)
+        # Генерируем маркер
+        test_marker = generator.generate_marker(marker_id)
+        filename = f'marker_{marker_id}.png'
+        cv2.imwrite(filename, test_marker)
+        
+        # Детектируем маркер
+        try:
+            original, contour_img, result_img, angle, area, distance = detect_marker(filename)
+            
+            # Выводим результаты
+            print(f"ID маркера: {marker_id}")
+            print(f"Угол поворота: {angle:.1f} градусов")
+            print(f"Дистанция: {distance:.3f} метров")
+            
+            # Показываем исходный маркер
+            cv2.imshow(f'original_marker {marker_id}', original)
+            cv2.waitKey(1000)  # Ждем 1 секунду
+            
+            # Показываем контур
+            cv2.imshow(f'contour_marker {marker_id}', contour_img)
+            cv2.waitKey(1000)  # Ждем 1 секунду
+            
+            # Показываем прямоугольник
+            cv2.imshow(f'detected_marker {marker_id}', result_img)
+            cv2.waitKey(1000)  # Ждем 1 секунду
+            
+            # Закрываем все окна
+            cv2.destroyAllWindows()
+            
+        except Exception as e:
+            print(f"Ошибка при детектировании маркера {marker_id}: {str(e)}")
+            cv2.destroyAllWindows()
+
+def test_size_variations():
+    print("\nТестирование маркера с разными размерами")
+    generator = MarkerGenerator()
+    
+    # Генерируем базовый маркер с ID 1
+    base_marker = generator.generate_marker(1)
+    
+    # Увеличиваем маркер в 1.5 раза
+    enlarged_marker = cv2.resize(base_marker, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_LINEAR)
+    cv2.imwrite('enlarged_marker.png', enlarged_marker)
+    
+    # Уменьшаем маркер в 2 раза
+    reduced_marker = cv2.resize(base_marker, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_LINEAR)
+    cv2.imwrite('reduced_marker.png', reduced_marker)
+    
+    # Тестируем увеличенный маркер
+    print("\nТестирование увеличенного маркера (1.5x)")
+    try:
+        original, contour_img, result_img, angle, area, distance = detect_marker('enlarged_marker.png')
+        print(f"ID маркера: 1")
+        print(f"Угол поворота: {angle:.1f} градусов")
+        print(f"Дистанция: {distance:.3f} метров")
+        
+        cv2.imshow('enlarged_marker', original)
         cv2.waitKey(1000)
-    else:
-        print("Маркер не обнаружен")
-    
-    cv2.destroyAllWindows()
-
-def test_overlap_resistance():
-    """Тест устойчивости к перекрытию"""
-    print("\nТест устойчивости к перекрытию:")
-    # Загружаем маркер
-    marker = cv2.imread('test_marker.png')
-    if marker is None:
-        print("Ошибка: не удалось загрузить маркер")
-        return
-    
-    # Создаем перекрытую версию маркера
-    height, width = marker.shape[:2]
-    overlap = int(width * 0.3)  # 30% перекрытие
-    overlapped = marker.copy()
-    overlapped[:, -overlap:] = 255  # Белый прямоугольник справа
-    
-    # Сохраняем перекрытый маркер
-    cv2.imwrite('test_marker_overlap.png', overlapped)
-    
-    # Создаем детектор
-    detector = MarkerDetector()
-    
-    # Примерные параметры камеры
-    camera_matrix = np.array([[1000, 0, 320],
-                            [0, 1000, 240],
-                            [0, 0, 1]], dtype=np.float32)
-    dist_coeffs = np.zeros((5, 1), dtype=np.float32)
-    
-    # Обнаружение маркера
-    result = detector.detect_marker(overlapped, camera_matrix, dist_coeffs)
-    
-    if result is not None:
-        print("Маркер успешно обнаружен с перекрытием 30%")
-        print(f"Углы: {result['rotation']}")
-        print(f"Расстояние: {result['translation'][2].item():.2f}м")
+        cv2.imshow('contour_enlarged_marker', contour_img)
+        cv2.waitKey(1000)
+        cv2.imshow('detected_enlarged_marker', result_img)
+        cv2.waitKey(1000)
+        cv2.destroyAllWindows()
         
-        # Отображаем результат
-        result_image = overlapped.copy()
-        cv2.drawContours(result_image, [result['corners']], -1, (0, 255, 0), 2)
-        cv2.imshow('Overlap Detection Result', result_image)
-        cv2.waitKey(0)
+    except Exception as e:
+        print(f"Ошибка при детектировании увеличенного маркера: {str(e)}")
         cv2.destroyAllWindows()
-    else:
-        print("Маркер не обнаружен с перекрытием")
-        # Показываем обработанное изображение для анализа
-        processed = detector.preprocess_image(overlapped)
-        cv2.imshow('Processed Overlapped Image', processed)
-        cv2.waitKey(0)
+    
+    # Тестируем уменьшенный маркер
+    print("\nТестирование уменьшенного маркера (0.5x)")
+    try:
+        original, contour_img, result_img, angle, area, distance = detect_marker('reduced_marker.png')
+        print(f"ID маркера: 1")
+        print(f"Угол поворота: {angle:.1f} градусов")
+        print(f"Дистанция: {distance:.3f} метров")
+        
+        cv2.imshow('reduced_marker', original)
+        cv2.waitKey(1000)
+        cv2.imshow('contour_reduced_marker', contour_img)
+        cv2.waitKey(1000)
+        cv2.imshow('detected_reduced_marker', result_img)
+        cv2.waitKey(1000)
+        cv2.destroyAllWindows()
+        
+    except Exception as e:
+        print(f"Ошибка при детектировании уменьшенного маркера: {str(e)}")
         cv2.destroyAllWindows()
 
-def main():
-    print("Запуск тестов...")
+def test_rotation():
+    print("\nТестирование маркера с разными углами поворота")
+    generator = MarkerGenerator()
     
-    # Тест генерации маркера
-    test_marker_generation()
+    # Генерируем базовый маркер с ID 1
+    base_marker = generator.generate_marker(1)
     
-    # Тест обнаружения маркера
-    test_marker_detection()
+    # Тестируем разные углы поворота
+    for angle in [15, 30, 45]:
+        print(f"\nТестирование маркера с поворотом на {angle} градусов")
+        
+        # Получаем размеры изображения
+        h, w = base_marker.shape[:2]
+        
+        # Вычисляем центр изображения
+        center = (w // 2, h // 2)
+        
+        # Создаем матрицу поворота
+        rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+        
+        # Применяем поворот
+        rotated_marker = cv2.warpAffine(base_marker, rotation_matrix, (w, h))
+        
+        # Сохраняем повернутый маркер
+        filename = f'rotated_marker_{angle}.png'
+        cv2.imwrite(filename, rotated_marker)
+        
+        # Детектируем маркер
+        try:
+            original, contour_img, result_img, detected_angle, area, distance = detect_marker(filename)
+            
+            # Выводим результаты
+            print(f"ID маркера: 1")
+            print(f"Обнаруженный угол поворота: {detected_angle:.1f} градусов")
+            print(f"Дистанция: {distance:.3f} метров")
+            
+            # Показываем повернутый маркер
+            cv2.imshow(f'rotated_marker {angle}', original)
+            cv2.waitKey(1000)
+            
+            # Показываем контур
+            cv2.imshow(f'contour_rotated_marker {angle}', contour_img)
+            cv2.waitKey(1000)
+            
+            # Показываем прямоугольник
+            cv2.imshow(f'detected_rotated_marker {angle}', result_img)
+            cv2.waitKey(1000)
+            
+            # Закрываем все окна
+            cv2.destroyAllWindows()
+            
+        except Exception as e:
+            print(f"Ошибка при детектировании повернутого маркера: {str(e)}")
+            cv2.destroyAllWindows()
+
+def test_noise():
+    print("\nТестирование маркера с шумом")
+    generator = MarkerGenerator()
     
-    # Тест устойчивости к перекрытию
-    test_overlap_resistance()
+    # Генерируем базовый маркер с ID 1
+    base_marker = generator.generate_marker(1)
     
-    print("\nТесты завершены")
+    # Создаем копию маркера для добавления шума
+    noisy_marker = base_marker.copy()
+    
+    # Получаем размеры изображения
+    h, w = noisy_marker.shape[:2]
+    
+    # Вычисляем количество пикселей для зашумления (30%)
+    num_pixels = int(h * w * 0.3)
+    
+    # Создаем маску случайных пикселей
+    mask = np.zeros((h, w), dtype=bool)
+    indices = np.random.choice(h * w, num_pixels, replace=False)
+    mask.flat[indices] = True
+    
+    # Применяем шум (делаем выбранные пиксели черными)
+    noisy_marker[mask] = 0
+    
+    # Сохраняем зашумленный маркер
+    cv2.imwrite('noisy_marker.png', noisy_marker)
+    
+    # Детектируем маркер
+    try:
+        original, contour_img, result_img, angle, area, distance = detect_marker('noisy_marker.png')
+        
+        # Выводим результаты
+        print(f"ID маркера: 1")
+        print(f"Угол поворота: {angle:.1f} градусов")
+        print(f"Дистанция: {distance:.3f} метров")
+        
+        # Показываем зашумленный маркер
+        cv2.imshow('noisy_marker', original)
+        cv2.waitKey(1000)
+        
+        # Показываем контур
+        cv2.imshow('contour_noisy_marker', contour_img)
+        cv2.waitKey(1000)
+        
+        # Показываем прямоугольник
+        cv2.imshow('detected_noisy_marker', result_img)
+        cv2.waitKey(1000)
+        
+        # Закрываем все окна
+        cv2.destroyAllWindows()
+        
+    except Exception as e:
+        print(f"Ошибка при детектировании зашумленного маркера: {str(e)}")
+        cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    main() 
+    test_detector()
+    test_size_variations()
+    test_rotation()
+    test_noise() 

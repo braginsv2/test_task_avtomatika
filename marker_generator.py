@@ -17,26 +17,27 @@ class MarkerGenerator:
         # Рисуем внешнюю рамку
         draw.rectangle([0, 0, self.size-1, self.size-1], outline=0, width=self.border_size)
         
-        # Рисуем угловые маркеры
-        corner_size = self.border_size * 3
+        # Рисуем угловые маркеры меньшего размера
+        corner_size = self.border_size * 2
         for i in range(4):
             x = (i % 2) * (self.size - corner_size)
             y = (i // 2) * (self.size - corner_size)
             draw.rectangle([x, y, x + corner_size - 1, y + corner_size - 1], 
                          fill=0)
         
-        # Рисуем ID маркера в центре
         # Преобразуем ID в бинарный код
         binary_id = format(marker_id, 'b').zfill(4)
         
         # Размер одной ячейки для бита
-        cell_size = (self.size - 4 * self.border_size) // 2
+        cell_size = (self.size - 6 * self.border_size) // 2
+        start_x = 3 * self.border_size
+        start_y = 3 * self.border_size
         
-        # Рисуем биты
+        # Рисуем биты с отступами
         for i, bit in enumerate(binary_id):
             if bit == '1':
-                x = (i % 2) * cell_size + 2 * self.border_size
-                y = (i // 2) * cell_size + 2 * self.border_size
+                x = start_x + (i % 2) * (cell_size + self.border_size)
+                y = start_y + (i // 2) * (cell_size + self.border_size)
                 draw.rectangle([x, y, x + cell_size - 1, y + cell_size - 1], 
                              fill=0)
         
