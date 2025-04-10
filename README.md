@@ -15,7 +15,7 @@
 1. Клонируйте репозиторий:
 ```bash
 git clone https://github.com/braginsv2/test_task_avtomatika
-cd https://github.com/braginsv2/test_task_avtomatika
+cd test_task_avtomatika
 ```
 
 2. Установите зависимости:
