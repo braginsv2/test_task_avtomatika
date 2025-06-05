@@ -30,21 +30,37 @@ class ArucoDetector:
         """
         binary, gray = self.preprocess_image(image)
         contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours=sorted(contours, key=cv2.contourArea, reverse=True)
+        
+        
         
         rect = cv2.minAreaRect(contours[1])
         (center, (width, height), angle) = rect
-        corrected_angle = 90-angle
-        if abs(corrected_angle) > 1:  # Поворачиваем только если угол значительный
+       
+        
+        if abs(angle) > 1:  # Поворачиваем только если угол значительный
                 # Поворачиваем в обратную сторону для компенсации
-                rotation_angle = -corrected_angle
-                image = rotate_image(image, rotation_angle)
-        self.rotation=corrected_angle
-
+                if (abs(angle))>45:
+                    corrected_angle = 90-angle
+                    rotation_angle = -corrected_angle
+                    image = rotate_image(image, rotation_angle)
+                    self.rotation=corrected_angle
+                if (abs(angle))<45:
+                    corrected_angle = angle
+                    rotation_angle =corrected_angle
+                    image = rotate_image(image, rotation_angle)
+                    self.rotation=corrected_angle        
+        else:
+            self.rotation=angle
+        
+        
         binary, gray = self.preprocess_image(image)
         contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours=sorted(contours, key=cv2.contourArea, reverse=True)
         x, y, w, h = cv2.boundingRect(contours[1])
         image = image[y:y+h, x:x+w]
-
+        self.big_contour = contours[1] 
+        
         # Предобработка для поиска контуров
         binary, gray = self.preprocess_image(image)
         
@@ -139,6 +155,7 @@ class ArucoDetector:
             print(f"Нормализованный маркер: {normalized_marker.shape}")
             #cv2.imwrite('debug_normalized_marker.png', normalized_marker)
         
+        
         return normalized_marker
 
     def find_contours_normalized(self, binary_image, show_debug=False):
@@ -171,11 +188,12 @@ class ArucoDetector:
         for idx, (i, contour) in enumerate(external_contours):
             area = cv2.contourArea(contour)
             
+
             if show_debug:
                 print(f"Внешний контур {idx}: площадь = {area}")
             
             # Фильтр по площади - проверенные значения для нормализованных изображений
-            if area < 1000 or area > 100000:
+            if area < 1000 or area > 105000:
                 if show_debug:
                     print(f"  Контур {idx} отклонен по площади")
                 continue
@@ -373,7 +391,7 @@ class ArucoDetector:
                     # Есть промежуточные значения - возможно низкое качество
                     # Используем 75-й процентиль от всех ненулевых значений
                     if len(non_zero_means) >= 2:
-                        threshold = min(threshold, np.percentile(non_zero_means, 75))
+                        threshold = min(threshold, np.percentile(non_zero_means, 87))
                         
         else:
             threshold = 50  # Фиксированный низкий порог для слабоконтрастных изображений
@@ -609,27 +627,6 @@ def detect_from_camera():
         # Детектируем маркеры
         markers = detector.detect_markers(frame)
         
-        # Рисуем найденные маркеры
-        for marker in markers:
-            # Рисуем контур
-            cv2.drawContours(frame, [marker['contour']], -1, (0, 255, 0), 2)
-            
-            # Подписываем ID
-            cx, cy = marker['center']
-            cv2.putText(frame, f'ID: {marker["id"]}', 
-                       (cx-30, cy-10), cv2.FONT_HERSHEY_SIMPLEX, 
-                       0.6, (255, 0, 0), 2)
-            
-            # Отмечаем центр
-            cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
-        
-        # Показываем кадр
-        cv2.imshow('Aruco Detector', frame)
-        
-        # Выход по нажатию 'q'
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-    
     cap.release()
     cv2.destroyAllWindows()
 
@@ -659,35 +656,7 @@ def detect_from_file(image_path, show_debug=True):
         
         # Теперь показываем работу с нормализованным изображением
         binary, gray = detector.preprocess_image(normalized_marker)
-        
-        # Визуализируем этапы
-        plt.figure(figsize=(15, 10))
-        
-        plt.subplot(2, 3, 1)
-        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        plt.title('1. Исходное изображение')
-        plt.axis('off')
-        
-        plt.subplot(2, 3, 2)
-        plt.imshow(cv2.cvtColor(normalized_marker, cv2.COLOR_BGR2RGB))
-        plt.title('2. Нормализованный маркер')
-        plt.axis('off')
-        
-        plt.subplot(2, 3, 3)
-        plt.imshow(binary, cmap='gray')
-        plt.title('3. Бинаризация')
-        plt.axis('off')
-        
-        # Ищем контуры для визуализации
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contour_image = cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB)
-        cv2.drawContours(contour_image, contours, -1, (0, 255, 0), 2)
-        
-        plt.subplot(2, 3, 4)
-        plt.imshow(contour_image)
-        plt.title(f'4. Все контуры ({len(contours)})')
-        plt.axis('off')
-        
+    
         # Показываем отфильтрованные контуры
         candidates = detector.find_contours_normalized(binary, show_debug=True)
         candidate_image = cv2.cvtColor(normalized_marker, cv2.COLOR_BGR2RGB)
@@ -701,19 +670,10 @@ def detect_from_file(image_path, show_debug=True):
                 cv2.putText(candidate_image, str(i), (cx-10, cy+5), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
         
-        plt.subplot(2, 3, 5)
-        plt.imshow(candidate_image)
-        plt.title(f'5. Кандидаты ({len(candidates)})')
-        plt.axis('off')
-        
         # Если есть кандидаты, показываем первый выровненный
         if candidates:
             try:
                 warped = detector.perspective_transform(gray, candidates[0])
-                plt.subplot(2, 3, 6)
-                plt.imshow(warped, cmap='gray')
-                plt.title('6. Выровненный кандидат')
-                plt.axis('off')
                 
                 # Показываем извлеченную сетку
                 grid = detector.extract_grid(warped, debug=True)
@@ -729,22 +689,6 @@ def detect_from_file(image_path, show_debug=True):
     # Детектируем маркеры с новым двухэтапным подходом
     if show_debug:
         markers, debug_image, corrected_angle = detector.detect_markers(image, show_debug=True)
-        
-        if markers:
-            # Показываем результат
-            plt.figure(figsize=(12, 6))
-            plt.subplot(1, 2, 1)
-            plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            plt.title('Исходное изображение')
-            plt.axis('off')
-            
-            plt.subplot(1, 2, 2)
-            plt.imshow(cv2.cvtColor(debug_image, cv2.COLOR_BGR2RGB))
-            plt.title('Детектированные маркеры (нормализованное)')
-            plt.axis('off')
-            
-            plt.tight_layout()
-            #plt.show()
     else:
         markers = detector.detect_markers(image)
     
@@ -763,4 +707,4 @@ def detect_from_file(image_path, show_debug=True):
 # Пример использования
 if __name__ == "__main__":   
     # Пример детекции из файла
-    markers = detect_from_file('aruco_marker_1_obr.png', show_debug=True)
+    markers = detect_from_file('quad_aruco_673_normal.png', show_debug=True)
